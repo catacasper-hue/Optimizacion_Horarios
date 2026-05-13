@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: optimizador-horarios
+    # Render detectará automáticamente el Dockerfile en la raíz del repositorio
+    env: docker
+    region: ohio # Puedes cambiar la región si lo prefieres
+    plan: free # Usa el plan gratuito por defecto, puedes ajustarlo si necesitas más recursos
+
+    # Opcional: Definiciones de variables de entorno si las necesitas a futuro
+    # envVars:
+    #   - key: ENV_VAR_NAME
+    #     value: value_here
