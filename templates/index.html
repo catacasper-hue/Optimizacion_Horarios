@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Optimizador de Horarios Docentes</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+
+<body>
+
+  <!-- ═══════════════════════════════ HEADER ═══════════════════════════════ -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="header-logo">📅</div>
+      <div>
+        <h1 class="header-title">Optimizador de Horarios Docentes</h1>
+        <p class="header-sub">Cargue el Excel con hojas <em>Disponibilidad</em> y <em>Horarios Fijos</em> para generar
+          la asignación optimizada.</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- ══════════════════════ PASO 1: CARGA ══════════════════════ -->
+    <section class="card" id="sec-upload">
+      <h2 class="card-title"><span class="step-badge">1</span> Cargar archivo Excel</h2>
+
+      <div class="upload-zone" id="upload-zone">
+        <div class="upload-icon">⬆️</div>
+        <p class="upload-text">Arrastre su archivo <strong>.xlsx</strong> aquí o haga clic para seleccionar</p>
+        <input type="file" id="file-input" accept=".xlsx" hidden />
+        <button class="btn btn-outline" onclick="document.getElementById('file-input').click()">
+          Seleccionar archivo
+        </button>
+      </div>
+
+      <div id="upload-status" class="hidden"></div>
+    </section>
+
+    <!-- ══════════════════════ PASO 2: VISTA PREVIA ══════════════════════ -->
+    <section class="card hidden" id="sec-preview">
+      <h2 class="card-title"><span class="step-badge">2</span> Vista previa de horarios</h2>
+      <p class="text-muted" id="preview-info"></p>
+      <div class="table-wrap">
+        <table class="data-table" id="preview-table">
+          <thead id="preview-thead"></thead>
+          <tbody id="preview-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══════════════════════ PASO 3: RESTRICCIONES ══════════════════════ -->
+    <section class="card hidden" id="sec-restrictions">
+      <h2 class="card-title"><span class="step-badge">3</span> Restricciones de asignación <span
+          class="badge-optional">opcional</span></h2>
+      <p class="text-muted">Agregue restricciones antes de optimizar. Puede añadir varias y eliminarlas.</p>
+
+      <div class="restriction-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Tipo de restricción</label>
+            <select id="rest-tipo" onchange="updateRestriccionForm()">
+              <option value="obligatoria">B. Profesor OBLIGATORIO para esta clase</option>
+              <option value="exclusivo">C. Clase EXCLUSIVA para este profesor</option>
+              <option value="permitida">A. Profesor PERMITIDO para esta clase (preferencia)</option>
+              <option value="solo_una">E. Profesor SOLO puede dictar esta clase</option>
+              <option value="debe_dictar">F. Profesor DEBE dictar esta clase</option>
+              <option value="horario_especifico">D. Horario ESPECÍFICO para una clase</option>
+              <option value="profesor_solo_nivel">G. Profesor SOLO puede dictar este nivel/materia</option>
+              <option value="nivel_solo_profesor">H. Nivel/materia SOLO puede ser dictado por este profesor</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Fila: profesor + clase (la mayoría de los tipos) -->
+        <div class="form-row" id="rest-row-prof-clase">
+          <div class="form-group">
+            <label>Profesor</label>
+            <select id="rest-profesor">
+              <option value="">— Seleccionar profesor —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Clase / Horario</label>
+            <select id="rest-clase">
+              <option value="">— Seleccionar clase —</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Fila: horario específico (tipo D) -->
+        <div class="form-row hidden" id="rest-row-horario">
+          <div class="form-group">
+            <label>Clase / Horario a modificar</label>
+            <select id="rest-clase-hor">
+              <option value="">— Seleccionar clase —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Nuevo día</label>
+            <select id="rest-dia-esp">
+              <option value="">— Día —</option>
+              <option>Lunes</option>
+              <option>Martes</option>
+              <option>Miércoles</option>
+              <option>Jueves</option>
+              <option>Viernes</option>
+              <option>Sábado</option>
+              <option>Domingo</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Hora inicio</label>
+            <input type="time" id="rest-h-ini" />
+          </div>
+          <div class="form-group">
+            <label>Hora fin</label>
+            <input type="time" id="rest-h-fin" />
+          </div>
+        </div>
+
+        <!-- Fila: restricciones por nivel / materia -->
+        <div class="form-row hidden" id="rest-row-nivel">
+          <div class="form-group">
+            <label>Profesor</label>
+            <select id="rest-profesor-nivel">
+              <option value="">— Seleccionar profesor —</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Nivel / Materia / Curso</label>
+            <select id="rest-nivel">
+              <option value="">— Seleccionar nivel o materia —</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-secondary" onclick="addRestriccion()">＋ Agregar restricción</button>
+        </div>
+      </div>
+
+      <!-- Lista de restricciones activas -->
+      <div id="restrictions-list" class="restrictions-list hidden">
+        <h3 class="subheading">Restricciones activas</h3>
+        <ul id="rest-items" class="rest-items"></ul>
+      </div>
+    </section>
+
+    <!-- ══════════════════════ PASO 4: OPTIMIZAR ══════════════════════ -->
+    <section class="card hidden" id="sec-optimize">
+      <h2 class="card-title"><span class="step-badge">4</span> Ejecutar optimización</h2>
+      <button class="btn btn-primary btn-lg" id="btn-optimize" onclick="runOptimize()">
+        ⚙️ Optimizar horarios
+      </button>
+      <div id="optimize-spinner" class="spinner-wrap hidden">
+        <div class="spinner"></div>
+        <span>Procesando, por favor espere…</span>
+      </div>
+    </section>
+
+    <!-- ══════════════════════ RESULTADOS ══════════════════════ -->
+    <section class="card hidden" id="sec-results">
+      <h2 class="card-title">✅ Resultados de la asignación</h2>
+      <p class="text-muted" id="result-metodo"></p>
+
+      <!-- Métricas -->
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <div class="metric-num" id="m-total">—</div>
+          <div class="metric-lbl">Total horarios</div>
+        </div>
+        <div class="metric-box metric-green">
+          <div class="metric-num" id="m-asig">—</div>
+          <div class="metric-lbl">✅ Asignados</div>
+        </div>
+        <div class="metric-box metric-red">
+          <div class="metric-num" id="m-noasig">—</div>
+          <div class="metric-lbl">❌ Sin asignar</div>
+        </div>
+        <div class="metric-box metric-blue">
+          <div class="metric-num" id="m-cob">—</div>
+          <div class="metric-lbl">Cobertura</div>
+        </div>
+      </div>
+
+      <!-- Filtros -->
+      <div class="filters-row">
+        <div class="form-group">
+          <label>Estado</label>
+          <select id="fil-estado" onchange="applyFilters()">
+            <option value="">Todos</option>
+            <option value="Asignado">Asignado</option>
+            <option value="No asignado">No asignado</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Día</label>
+          <select id="fil-dia" onchange="applyFilters()">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Curso</label>
+          <select id="fil-curso" onchange="applyFilters()">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Buscar</label>
+          <input type="text" id="fil-buscar" placeholder="Profesor, ID, observación…" oninput="applyFilters()" />
+        </div>
+      </div>
+
+      <!-- Tabla resultado -->
+      <div class="table-wrap">
+        <table class="data-table" id="result-table">
+          <thead id="result-thead"></thead>
+          <tbody id="result-tbody"></tbody>
+        </table>
+      </div>
+      <p class="text-muted" id="result-count"></p>
+
+      <!-- Descarga -->
+      <div class="download-bar">
+        <button class="btn btn-primary btn-lg" id="btn-download" onclick="downloadResult()">
+          ⬇️ Descargar Excel optimizado
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="app-footer">
+    <p>Optimizador de Horarios Docentes · Centro de Lenguas</p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+
+</html>
