@@ -174,19 +174,81 @@ async function uploadFile(file) {
 }
 
 function updateRestriccionForm() {
-    const tipo = $("rest-tipo").value;
+  const tipo = $("rest-tipo").value;
 
-    hide("rest-row-prof-clase");
-    hide("rest-row-horario");
-    hide("rest-row-nivel");
+  hide("rest-row-prof-clase");
+  hide("rest-row-horario");
+  hide("rest-row-nivel");
 
-    if (tipo === "horario_especifico") {
-        show("rest-row-horario");
-    } else if (tipo === "profesor_solo_nivel" || tipo === "nivel_solo_profesor") {
-        show("rest-row-nivel");
-    } else {
-        show("rest-row-prof-clase");
-    }
+  const explicaciones = {
+    obligatoria: `
+      <strong>Asignar una clase obligatoriamente a un profesor.</strong><br>
+      Use esta opción cuando una clase específica debe quedar asignada a un profesor determinado.
+      El sistema intentará respetar esta regla siempre que el profesor tenga disponibilidad y no tenga cruce de horario.
+      <br><em>Ejemplo: “Diana debe dictar Inglés 6 - Grupo 2”.</em>
+    `,
+
+    exclusivo: `
+      <strong>Hacer que una clase solo pueda ser dictada por un profesor.</strong><br>
+      Use esta opción cuando una clase no puede ser asignada a ningún otro profesor.
+      Si ese profesor no está disponible, la clase quedará sin asignar.
+      <br><em>Ejemplo: “Este grupo de Inglés 4 solo puede dictarlo Diana”.</em>
+    `,
+
+    permitida: `
+      <strong>Permitir que un profesor pueda dictar una clase específica.</strong><br>
+      Use esta opción cuando quiere habilitar o dar preferencia a un profesor para una clase.
+      No obliga necesariamente la asignación, pero ayuda al modelo a considerarlo como opción válida.
+      <br><em>Ejemplo: “Sarah puede dictar este grupo si el modelo lo necesita”.</em>
+    `,
+
+    solo_una: `
+      <strong>Limitar a un profesor para que solo dicte una clase específica.</strong><br>
+      Use esta opción cuando un profesor solo debe participar en una clase puntual y no debe ser asignado a otras clases.
+      <br><em>Ejemplo: “Este profesor solo puede dictar Inglés 5 - Grupo 1”.</em>
+    `,
+
+    debe_dictar: `
+      <strong>Forzar que un profesor dicte una clase específica.</strong><br>
+      Es similar a la asignación obligatoria. Use esta opción cuando, por decisión académica o administrativa,
+      un profesor debe quedar asignado a una clase concreta.
+      <br><em>Ejemplo: “Liliana debe dictar este grupo de Minor”.</em>
+    `,
+
+    horario_especifico: `
+      <strong>Cambiar el día y horario de una clase.</strong><br>
+      Use esta opción cuando una clase debe moverse a otro día u otra franja horaria antes de optimizar.
+      El sistema validará la disponibilidad de los profesores usando el nuevo horario.
+      <br><em>Ejemplo: “Mover Inglés 2 del lunes 8:00 a martes 10:00”.</em>
+    `,
+
+    profesor_solo_nivel: `
+      <strong>Limitar a un profesor a un solo nivel o materia.</strong><br>
+      Use esta opción cuando un profesor no debe quedar con muchos niveles diferentes.
+      Si selecciona un nivel, el modelo solo podrá asignarle clases de ese nivel o materia.
+      <br><em>Ejemplo: “Diana solo debe dictar Inglés 6”.</em>
+    `,
+
+    nivel_solo_profesor: `
+      <strong>Hacer que un nivel o materia solo lo dicte un profesor.</strong><br>
+      Use esta opción cuando todos los grupos de un mismo nivel deben concentrarse en un solo profesor.
+      El modelo intentará asignar ese nivel únicamente al profesor seleccionado.
+      <br><em>Ejemplo: “Todos los grupos de Inglés 1 deben ser dictados por Sarah”.</em>
+    `,
+  };
+
+  const explicacion = $("rest-explicacion");
+  if (explicacion) {
+    explicacion.innerHTML = explicaciones[tipo] || "Seleccione un tipo de restricción.";
+  }
+
+  if (tipo === "horario_especifico") {
+    show("rest-row-horario");
+  } else if (tipo === "profesor_solo_nivel" || tipo === "nivel_solo_profesor") {
+    show("rest-row-nivel");
+  } else {
+    show("rest-row-prof-clase");
+  }
 }
 
 function getClaseLabel(id) {
