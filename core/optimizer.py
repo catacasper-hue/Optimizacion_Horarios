@@ -850,7 +850,6 @@ def _style_sheet(ws, header_color: str, alt_color: str) -> None:
         max_len = max((len(str(c.value)) if c.value else 0) for c in col)
         ws.column_dimensions[get_column_letter(col[0].column)].width = min(max_len + 4, 45)
     ws.row_dimensions[1].height = 30
-    
 def build_carga_por_nivel(df_result: pd.DataFrame) -> pd.DataFrame:
     """
     Construye una tabla tipo matriz para visualizar la carga por profesor:
@@ -886,8 +885,7 @@ carga = (
         ascending=[True, False]
     )
 )
-
-    rows = []
+rows = []
 
     for profesor, grupo_prof in carga.groupby("Profesor asignado"):
         niveles = grupo_prof[["Curso", "# grupos"]].values.tolist()
