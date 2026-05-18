@@ -556,71 +556,74 @@ def _pulp_assign(
         (p, h): pulp.LpVariable(f"x_{p.replace(' ', '_')}_{h.replace('-', '_')}", cat="Binary")
         for (p, h) in valid_pairs
     }
-# ------------------------------------------------------------------
-# Objetivo:
-# 1. Maximizar cantidad de clases asignadas.
-# 2. Penalizar que un profesor tenga demasiados niveles distintos.
-# 3. Penalizar suavemente cargas demasiado altas.
-# ------------------------------------------------------------------
-asignados_total = pulp.lpSum(x.values())
+        # ------------------------------------------------------------------
+    # Objetivo:
+    # 1. Maximizar cantidad de clases asignadas.
+    # 2. Penalizar que un profesor tenga demasiados niveles distintos.
+    # 3. Penalizar suavemente cargas demasiado altas.
+    # ------------------------------------------------------------------
 
-# Cursos/niveles existentes
-cursos = sorted({
-    str(hor.get("curso", "")).strip()
-    for hor in horarios_sorted
-    if str(hor.get("curso", "")).strip()
-})
+    asignados_total = pulp.lpSum(x.values())
 
-# y[p, curso] = 1 si el profesor p dicta al menos una clase de ese curso/nivel
-y = {}
-for prof in profesores:
-    for curso in cursos:
-        y[(prof, curso)] = pulp.LpVariable(
-            f"y_{prof.replace(' ', '_')}_{curso.replace(' ', '_')}",
-            cat="Binary"
-        )
+    # Cursos/niveles existentes
+    cursos = sorted({
+        str(hor.get("curso", "")).strip()
+        for hor in horarios_sorted
+        if str(hor.get("curso", "")).strip()
+    })
 
-# Relacionar x con y:
-# si x[p, horario] = 1, entonces y[p, curso_del_horario] debe ser 1
-for hor in horarios_sorted:
-    id_h = str(hor.get("id_horario", ""))
-    curso = str(hor.get("curso", "")).strip()
-
-    if not curso:
-        continue
+    # y[p, curso] = 1 si el profesor p dicta al menos una clase de ese curso/nivel
+    y = {}
 
     for prof in profesores:
-        if (prof, id_h) in x:
-            prob += x[(prof, id_h)] <= y[(prof, curso)]
+        for curso in cursos:
+            y[(prof, curso)] = pulp.LpVariable(
+                f"y_{prof.replace(' ', '_')}_{curso.replace(' ', '_')}",
+                cat="Binary"
+            )
 
-# Número de niveles distintos por profesor
-niveles_distintos_total = pulp.lpSum(y.values())
+    # Relacionar x con y:
+    # si x[p, horario] = 1, entonces y[p, curso_del_horario] debe ser 1
+    for hor in horarios_sorted:
+        id_h = str(hor.get("id_horario", ""))
+        curso = str(hor.get("curso", "")).strip()
 
-# Horas por profesor
-total_horas_por_prof = {
-    prof: pulp.lpSum(
-        x[(prof, id_h)] * (
-            (parse_time(hor.get("hora_fin")) or 0) - (parse_time(hor.get("hora_inicio")) or 0)
+        if not curso:
+            continue
+
+        for prof in profesores:
+            if (prof, id_h) in x:
+                prob += x[(prof, id_h)] <= y[(prof, curso)]
+
+    # Número total de combinaciones profesor-nivel usadas
+    # Mientras menor sea, más concentrados quedan los niveles por profesor
+    niveles_distintos_total = pulp.lpSum(y.values())
+
+    # Horas por profesor
+    total_horas_por_prof = {
+        prof: pulp.lpSum(
+            x[(prof, id_h)] * (
+                (parse_time(hor.get("hora_fin")) or 0)
+                - (parse_time(hor.get("hora_inicio")) or 0)
+            )
+            for hor in horarios_sorted
+            for id_h in [str(hor.get("id_horario", ""))]
+            if (prof, id_h) in x
         )
-        for hor in horarios_sorted
-        for id_h in [str(hor.get("id_horario", ""))]
-        if (prof, id_h) in x
+        for prof in profesores
+    }
+
+    horas_totales = pulp.lpSum(total_horas_por_prof.values())
+
+    # Función objetivo:
+    # - 1000: asignar clases es lo más importante.
+    # - 15: penaliza abrir demasiados niveles distintos por profesor.
+    # - 0.01: penalización suave por horas, sirve como desempate.
+    prob += (
+        asignados_total * 1000
+        - niveles_distintos_total * 15
+        - horas_totales * 0.01
     )
-    for prof in profesores
-}
-
-horas_totales = pulp.lpSum(total_horas_por_prof.values())
-
-# Peso de la función objetivo:
-# - 1000: asignar clases es lo más importante.
-# - 15: penaliza que un profesor tenga muchos niveles diferentes.
-# - 0.01: penalización suave por horas totales, solo para desempatar.
-prob += (
-    asignados_total * 1000
-    - niveles_distintos_total * 15
-    - horas_totales * 0.01
-)
-
     # Restricción: cada horario asignado a máximo 1 profesor
     for id_h in horario_ids:
         vars_h = [x[(p, id_h)] for p in profesores if (p, id_h) in x]
@@ -810,31 +813,29 @@ def _style_sheet(ws, header_color: str, alt_color: str) -> None:
     
 def build_carga_por_nivel(df_result: pd.DataFrame) -> pd.DataFrame:
     """
-    Construye una tabla tipo matriz:
-    Profesor | Nivel 1 | # grupos | Nivel 2 | # grupos | Nivel 3 | # grupos | Total grupos
+    Construye una tabla tipo matriz para visualizar la carga por profesor:
 
-    La idea es visualizar cuántos niveles diferentes dicta cada profesor
-    y cuántos grupos tiene por cada nivel.
+    NOMBRE PROFESOR | NIVEL 1 | # grupos 1 | NIVEL 2 | # grupos 2 | ... | TOTAL GRUPOS
     """
     df_asig = df_result[df_result["Estado"] == "Asignado"].copy()
 
     if df_asig.empty:
         return pd.DataFrame(columns=[
             "NOMBRE PROFESOR",
-            "NIVEL 1", "# grupos 1",
-            "NIVEL 2", "# grupos 2",
-            "NIVEL 3", "# grupos 3",
-            "NIVEL 4", "# grupos 4",
+            "NIVEL 1",
+            "# grupos 1",
             "TOTAL GRUPOS",
         ])
 
-    # Agrupar por profesor y curso/nivel
     carga = (
         df_asig
         .groupby(["Profesor asignado", "Curso"])
         .size()
         .reset_index(name="# grupos")
-        .sort_values(["Profesor asignado", "# grupos"], ascending=[True, False])
+        .sort_values(
+            ["Profesor asignado", "# grupos"],
+            ascending=[True, False]
+        )
     )
 
     rows = []
@@ -850,6 +851,7 @@ def build_carga_por_nivel(df_result: pd.DataFrame) -> pd.DataFrame:
         for i, item in enumerate(niveles, start=1):
             curso = item[0]
             num_grupos = int(item[1])
+
             row[f"NIVEL {i}"] = curso
             row[f"# grupos {i}"] = num_grupos
 
@@ -857,12 +859,13 @@ def build_carga_por_nivel(df_result: pd.DataFrame) -> pd.DataFrame:
 
     df_carga = pd.DataFrame(rows)
 
-    # Ordenar columnas dinámicamente
     max_niveles = 0
+
     for col in df_carga.columns:
         if col.startswith("NIVEL "):
             try:
-                max_niveles = max(max_niveles, int(col.replace("NIVEL ", "")))
+                numero = int(col.replace("NIVEL ", ""))
+                max_niveles = max(max_niveles, numero)
             except ValueError:
                 pass
 
@@ -942,30 +945,34 @@ def generate_excel(df_result: pd.DataFrame, metodo: str = "") -> bytes:
     )
     for _, r in carga.iterrows():
         ws_res.append([r["Profesor asignado"], int(r["Bloques"]), int(r["Horas"])])
+        _style_sheet(ws_res, "375623", "E2EFDA")
 
-_style_sheet(ws_res, "375623", "E2EFDA")
+    # ── Hoja Carga por nivel ──
+    ws_nivel = wb.create_sheet("Carga por nivel")
 
-# ── Hoja Carga por nivel ──
-ws_nivel = wb.create_sheet("Carga por nivel")
+    df_carga_nivel = build_carga_por_nivel(df_result)
 
-df_carga_nivel = build_carga_por_nivel(df_result)
+    ws_nivel.append(df_carga_nivel.columns.tolist())
 
-ws_nivel.append(df_carga_nivel.columns.tolist())
+    for _, row in df_carga_nivel.iterrows():
+        ws_nivel.append(row.tolist())
 
-for _, row in df_carga_nivel.iterrows():
-    ws_nivel.append(row.tolist())
+    _style_sheet(ws_nivel, "1F4E79", "D6E4F0")
+    ws_nivel.freeze_panes = "A2"
 
-_style_sheet(ws_nivel, "1F4E79", "D6E4F0")
-ws_nivel.freeze_panes = "A2"
+    # Resaltar TOTAL GRUPOS en rojo
+    if "TOTAL GRUPOS" in df_carga_nivel.columns:
+        total_col_idx = df_carga_nivel.columns.tolist().index("TOTAL GRUPOS") + 1
 
-# Pintar TOTAL GRUPOS en rojo para que resalte
-if "TOTAL GRUPOS" in df_carga_nivel.columns:
-    total_col_idx = df_carga_nivel.columns.tolist().index("TOTAL GRUPOS") + 1
+        for row in ws_nivel.iter_rows(min_row=2, max_row=ws_nivel.max_row):
+            total_cell = row[total_col_idx - 1]
+            total_cell.font = Font(
+                bold=True,
+                color="FF0000",
+                name="Arial",
+                size=10
+            )
 
-    for row in ws_nivel.iter_rows(min_row=2, max_row=ws_nivel.max_row):
-        total_cell = row[total_col_idx - 1]
-        total_cell.font = Font(bold=True, color="FF0000", name="Arial", size=10)
-
-buf = io.BytesIO()
-wb.save(buf)
-return buf.getvalue()
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
