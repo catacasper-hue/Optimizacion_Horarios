@@ -629,7 +629,47 @@ def _pulp_assign(
         vars_h = [x[(p, id_h)] for p in profesores if (p, id_h) in x]
         if vars_h:
             prob += pulp.lpSum(vars_h) <= 1
+        # ------------------------------------------------------------------
+    # Restricción: mantener el mismo profesor para todas las sesiones
+    # del mismo grupo académico.
+    #
+    # Ejemplo:
+    # INGLÉS 1 - Grupo 2 - Miércoles
+    # INGLÉS 1 - Grupo 2 - Jueves
+    # deben quedar con el mismo profesor.
+    # ------------------------------------------------------------------
 
+    grupos_academicos = {}
+
+    for hor in horarios_sorted:
+        id_h = str(hor.get("id_horario", "")).strip()
+
+        clave_grupo = (
+            str(hor.get("lengua", "")).strip(),
+            str(hor.get("curso", "")).strip(),
+            str(hor.get("nivel", "")).strip(),
+            str(hor.get("grupo", "")).strip(),
+        )
+
+        grupos_academicos.setdefault(clave_grupo, []).append(id_h)
+
+    for clave_grupo, ids_grupo in grupos_academicos.items():
+        if len(ids_grupo) <= 1:
+            continue
+
+        for prof in profesores:
+            ids_validos_prof = [
+                id_h for id_h in ids_grupo
+                if (prof, id_h) in x
+            ]
+
+            if len(ids_validos_prof) <= 1:
+                continue
+
+            primer_id = ids_validos_prof[0]
+
+            for otro_id in ids_validos_prof[1:]:
+                prob += x[(prof, primer_id)] == x[(prof, otro_id)]
     # Restricción: sin solapamiento de horarios por profesor
     for prof in profesores:
         dia_horas: dict[tuple, list] = {}
@@ -827,16 +867,25 @@ def build_carga_por_nivel(df_result: pd.DataFrame) -> pd.DataFrame:
             "TOTAL GRUPOS",
         ])
 
-    carga = (
-        df_asig
-        .groupby(["Profesor asignado", "Curso"])
-        .size()
-        .reset_index(name="# grupos")
-        .sort_values(
-            ["Profesor asignado", "# grupos"],
-            ascending=[True, False]
-        )
+    df_asig["grupo_unico"] = (
+    df_asig["Lengua"].astype(str).str.strip()
+    + " | "
+    + df_asig["Curso"].astype(str).str.strip()
+    + " | "
+    + df_asig["Grupo"].astype(str).str.strip()
+)
+
+carga = (
+    df_asig
+    .drop_duplicates(subset=["Profesor asignado", "Curso", "grupo_unico"])
+    .groupby(["Profesor asignado", "Curso"])
+    .size()
+    .reset_index(name="# grupos")
+    .sort_values(
+        ["Profesor asignado", "# grupos"],
+        ascending=[True, False]
     )
+)
 
     rows = []
 
