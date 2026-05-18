@@ -825,36 +825,13 @@ def optimize_assignments(
 # GENERACIÓN DEL EXCEL DE SALIDA
 # ---------------------------------------------------------------------------
 
-def _style_sheet(ws, header_color: str, alt_color: str) -> None:
-    thin   = Side(style="thin", color="CCCCCC")
-    border = Border(left=thin, right=thin, top=thin, bottom=thin)
-    h_fill = PatternFill("solid", start_color=header_color)
-    a_fill = PatternFill("solid", start_color=alt_color)
-
-    for cell in ws[1]:
-        cell.font      = Font(bold=True, color="FFFFFF", name="Arial", size=10)
-        cell.fill      = h_fill
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        cell.border    = border
-
-    for row_idx, row in enumerate(ws.iter_rows(min_row=2), 2):
-        fill = a_fill if row_idx % 2 == 0 else PatternFill()
-        for cell in row:
-            cell.font      = Font(name="Arial", size=9)
-            cell.alignment = Alignment(vertical="center", wrap_text=True)
-            cell.border    = border
-            if fill.fill_type:
-                cell.fill = fill
-
-    for col in ws.columns:
-        max_len = max((len(str(c.value)) if c.value else 0) for c in col)
-        ws.column_dimensions[get_column_letter(col[0].column)].width = min(max_len + 4, 45)
-    ws.row_dimensions[1].height = 30
 def build_carga_por_nivel(df_result: pd.DataFrame) -> pd.DataFrame:
     """
-    Construye una tabla tipo matriz para visualizar la carga por profesor:
+    Construye una tabla tipo matriz para visualizar la carga por profesor.
 
-    NOMBRE PROFESOR | NIVEL 1 | # grupos 1 | NIVEL 2 | # grupos 2 | ... | TOTAL GRUPOS
+    Cuenta grupos únicos por profesor y curso/nivel, no bloques horarios.
+    Por ejemplo, si INGLÉS 1 Grupo 2 tiene clase miércoles y jueves,
+    se cuenta como 1 grupo, no como 2.
     """
     df_asig = df_result[df_result["Estado"] == "Asignado"].copy()
 
@@ -867,25 +844,26 @@ def build_carga_por_nivel(df_result: pd.DataFrame) -> pd.DataFrame:
         ])
 
     df_asig["grupo_unico"] = (
-    df_asig["Lengua"].astype(str).str.strip()
-    + " | "
-    + df_asig["Curso"].astype(str).str.strip()
-    + " | "
-    + df_asig["Grupo"].astype(str).str.strip()
-)
-
-carga = (
-    df_asig
-    .drop_duplicates(subset=["Profesor asignado", "Curso", "grupo_unico"])
-    .groupby(["Profesor asignado", "Curso"])
-    .size()
-    .reset_index(name="# grupos")
-    .sort_values(
-        ["Profesor asignado", "# grupos"],
-        ascending=[True, False]
+        df_asig["Lengua"].astype(str).str.strip()
+        + " | "
+        + df_asig["Curso"].astype(str).str.strip()
+        + " | "
+        + df_asig["Grupo"].astype(str).str.strip()
     )
-)
-rows = []
+
+    carga = (
+        df_asig
+        .drop_duplicates(subset=["Profesor asignado", "Curso", "grupo_unico"])
+        .groupby(["Profesor asignado", "Curso"])
+        .size()
+        .reset_index(name="# grupos")
+        .sort_values(
+            ["Profesor asignado", "# grupos"],
+            ascending=[True, False]
+        )
+    )
+
+    rows = []
 
     for profesor, grupo_prof in carga.groupby("Profesor asignado"):
         niveles = grupo_prof[["Curso", "# grupos"]].values.tolist()
@@ -933,6 +911,35 @@ rows = []
 
     return df_carga
 
+
+def _style_sheet(ws, header_color: str, alt_color: str) -> None:
+    thin = Side(style="thin", color="CCCCCC")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    h_fill = PatternFill("solid", start_color=header_color)
+    a_fill = PatternFill("solid", start_color=alt_color)
+
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color="FFFFFF", name="Arial", size=10)
+        cell.fill = h_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = border
+
+    for row_idx, row in enumerate(ws.iter_rows(min_row=2), 2):
+        fill = a_fill if row_idx % 2 == 0 else PatternFill()
+        for cell in row:
+            cell.font = Font(name="Arial", size=9)
+            cell.alignment = Alignment(vertical="center", wrap_text=True)
+            cell.border = border
+            if fill.fill_type:
+                cell.fill = fill
+
+    for col in ws.columns:
+        max_len = max((len(str(c.value)) if c.value else 0) for c in col)
+        ws.column_dimensions[get_column_letter(col[0].column)].width = min(max_len + 4, 45)
+
+    ws.row_dimensions[1].height = 30
+
+
 def generate_excel(df_result: pd.DataFrame, metodo: str = "") -> bytes:
     """Genera el Excel de salida y lo retorna como bytes."""
     wb = Workbook()
@@ -942,7 +949,8 @@ def generate_excel(df_result: pd.DataFrame, metodo: str = "") -> bytes:
     # ── Hoja Asignación ──
     cols = df_result.columns.tolist()
     ws_asig.append(cols)
-    red_fill   = PatternFill("solid", start_color="FFCCCC")
+
+    red_fill = PatternFill("solid", start_color="FFCCCC")
     green_fill = PatternFill("solid", start_color="C6EFCE")
     estado_idx = cols.index("Estado")
 
@@ -951,32 +959,32 @@ def generate_excel(df_result: pd.DataFrame, metodo: str = "") -> bytes:
 
     for row in ws_asig.iter_rows(min_row=2, max_row=ws_asig.max_row):
         estado_cell = row[estado_idx]
-        estado_cell.fill = (
-            green_fill if estado_cell.value == "Asignado" else red_fill
-        )
+        estado_cell.fill = green_fill if estado_cell.value == "Asignado" else red_fill
 
     _style_sheet(ws_asig, "1F4E79", "D6E4F0")
     ws_asig.freeze_panes = "A2"
 
     # ── Hoja Resumen ──
     ws_res = wb.create_sheet("Resumen")
-    total       = len(df_result)
-    asignados   = (df_result["Estado"] == "Asignado").sum()
-    no_asig     = total - asignados
-    cobertura   = f"{round(asignados / total * 100, 1)}%" if total else "0%"
+
+    total = len(df_result)
+    asignados = int((df_result["Estado"] == "Asignado").sum())
+    no_asig = total - asignados
+    cobertura = f"{round(asignados / total * 100, 1)}%" if total else "0%"
 
     ws_res.append(["Métrica", "Valor"])
     for label, val in [
         ("Total horarios procesados", total),
-        ("Total asignados",           asignados),
-        ("Total sin asignar",         int(no_asig)),
-        ("Cobertura",                 cobertura),
-        ("Método de optimización",    metodo),
+        ("Total asignados", asignados),
+        ("Total sin asignar", int(no_asig)),
+        ("Cobertura", cobertura),
+        ("Método de optimización", metodo),
     ]:
         ws_res.append([label, val])
 
     ws_res.append([])
     ws_res.append(["Carga por Profesor", "Bloques asignados", "Horas estimadas"])
+
     carga = (
         df_result[df_result["Estado"] == "Asignado"]
         .groupby("Profesor asignado")
@@ -990,9 +998,15 @@ def generate_excel(df_result: pd.DataFrame, metodo: str = "") -> bytes:
         .reset_index()
         .sort_values("Horas", ascending=False)
     )
+
     for _, r in carga.iterrows():
-        ws_res.append([r["Profesor asignado"], int(r["Bloques"]), int(r["Horas"])])
-        _style_sheet(ws_res, "375623", "E2EFDA")
+        ws_res.append([
+            r["Profesor asignado"],
+            int(r["Bloques"]),
+            int(r["Horas"])
+        ])
+
+    _style_sheet(ws_res, "375623", "E2EFDA")
 
     # ── Hoja Carga por nivel ──
     ws_nivel = wb.create_sheet("Carga por nivel")
@@ -1023,3 +1037,4 @@ def generate_excel(df_result: pd.DataFrame, metodo: str = "") -> bytes:
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
