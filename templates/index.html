@@ -63,15 +63,17 @@
           <div class="form-group">
             <label>Tipo de restricción</label>
             <select id="rest-tipo" onchange="updateRestriccionForm()">
-              <option value="obligatoria">B. Profesor OBLIGATORIO para esta clase</option>
-              <option value="exclusivo">C. Clase EXCLUSIVA para este profesor</option>
-              <option value="permitida">A. Profesor PERMITIDO para esta clase (preferencia)</option>
-              <option value="solo_una">E. Profesor SOLO puede dictar esta clase</option>
-              <option value="debe_dictar">F. Profesor DEBE dictar esta clase</option>
-              <option value="horario_especifico">D. Horario ESPECÍFICO para una clase</option>
-              <option value="profesor_solo_nivel">G. Profesor SOLO puede dictar este nivel/materia</option>
-              <option value="nivel_solo_profesor">H. Nivel/materia SOLO puede ser dictado por este profesor</option>
+              <option value="obligatoria">Asignar una clase obligatoriamente a un profesor</option>
+              <option value="exclusivo">Hacer que una clase solo pueda ser dictada por un profesor</option>
+              <option value="permitida">Permitir que un profesor pueda dictar una clase específica (preferencia)</option>
+              <option value="solo_una">Limitar a un profesor para que solo dicte una clase específica</option>
+              <option value="debe_dictar">Forzar que un profesor dicte una clase específica</option>
+              <option value="horario_especifico">Cambiar el día y horario de una clase</option>
+              <option value="profesor_solo_nivel">Limitar a un profesor a un solo nivel o materia</option>
+              <option value="nivel_solo_profesor">Hacer que un nivel o materia solo lo dicte un profesor</option>
             </select>
+              <div id="rest-explicacion" class="restriction-help">
+                Seleccione un tipo de restricción para ver su explicación.
           </div>
         </div>
 
